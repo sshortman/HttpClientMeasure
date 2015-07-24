@@ -70,8 +70,8 @@ public abstract class AbstractVerifier implements X509HostnameVerifier {
             throw new NullPointerException("host to verify is null");
         }
 
-        long startEpoch = System.currentTimeMillis();
         SSLSession session = null;
+        Metrics.getInstance().startStep(Metrics.STEP_4);
         try {
             session = ssl.getSession();
             if (session == null) {
@@ -111,10 +111,7 @@ public abstract class AbstractVerifier implements X509HostnameVerifier {
             }
         }
         finally {
-            long endEpoch = System.currentTimeMillis();
-            _handShakeCount++;
-            _handShakeTime += endEpoch - startEpoch;
-            _hansShakeStatus = session == null ? 100 : 200;
+            Metrics.getInstance().finishStep(Metrics.STEP_4);
         }
 
         Certificate[] certs = session.getPeerCertificates();

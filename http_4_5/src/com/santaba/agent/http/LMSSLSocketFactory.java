@@ -60,10 +60,6 @@ public class LMSSLSocketFactory implements LayeredConnectionSocketFactory, Schem
     public static final X509HostnameVerifier STRICT_HOSTNAME_VERIFIER
             = new StrictHostnameVerifier();
 
-    public int handShakeCount = 0;
-    public long handShakeTime = 0;
-    public int handShakeStatus = 100; //200 means OK
-
     /**
      * Obtains default SSL socket factory with an SSL context based on the standard JSSE
      * trust material ({@code cacerts} file in the security properties directory).
@@ -417,9 +413,15 @@ public class LMSSLSocketFactory implements LayeredConnectionSocketFactory, Schem
     }
 
     public Socket createSocket(final HttpContext context) throws IOException {
-        final SSLSocket sock = (SSLSocket) this.socketfactory.createSocket();
-        internalPrepareSocket(sock);
-        return sock;
+        Metrics.getInstance().startStep(Metrics.STEP_3);
+        try {
+            final SSLSocket sock = (SSLSocket) this.socketfactory.createSocket();
+            internalPrepareSocket(sock);
+            return sock;
+        }
+        finally {
+            Metrics.getInstance().finishStep(Metrics.STEP_3);
+        }
     }
 
     public Socket connectSocket(
@@ -459,29 +461,30 @@ public class LMSSLSocketFactory implements LayeredConnectionSocketFactory, Schem
             final String target,
             final int port,
             final HttpContext context) throws IOException {
-        final SSLSocket sslsock = (SSLSocket) this.socketfactory.createSocket(
-                socket,
-                target,
-                port,
-                true);
+        SSLSocket sslsock;
+        try {
+            sslsock = (SSLSocket) this.socketfactory.createSocket(
+                    socket,
+                    target,
+                    port,
+                    true);
+        }
+        finally {
+
+        }
         internalPrepareSocket(sslsock);
         handShake(sslsock, target);
         return sslsock;
     }
 
     private void handShake(SSLSocket socket, String target) throws IOException {
-        boolean shakeSuccess = false;
-        long startEpoch = System.currentTimeMillis();
+        Metrics.getInstance().startStep(Metrics.STEP_4);
         try {
             socket.startHandshake();
             verifyHostname(socket, target);
-            shakeSuccess = true;
         }
         finally {
-            long endEpoch = System.currentTimeMillis();
-            handShakeCount++;
-            handShakeTime += endEpoch - startEpoch;
-            handShakeStatus = shakeSuccess ? 200 : 100;
+            Metrics.getInstance().finishStep(Metrics.STEP_4);
         }
     }
 

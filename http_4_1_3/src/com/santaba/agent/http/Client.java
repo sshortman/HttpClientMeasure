@@ -65,9 +65,7 @@ public class Client {
             }
         };
 
-        Long startEpoch = null;
-        HttpResponse response = null;
-        try {
+
             CommandLineParser parser = new DefaultParser();
             CommandLine commandLine = parser.parse(options, argv);
 
@@ -120,24 +118,18 @@ public class Client {
                 }
             }
 
-
-
-            DefaultHttpClient client = new DefaultHttpClient(getManager(httpParams, hv), httpParams);
+            LMDefaultHttpClient client = new LMDefaultHttpClient(getManager(httpParams, hv), httpParams);
             get.setURI(new URI(args[0]));
-            startEpoch = System.currentTimeMillis();
+        HttpResponse response = null;
+        Metrics.getInstance().startStep(Metrics.STEP_ALL);
+        try {
+
             response = client.execute(get, new BasicHttpContext());
         }
         finally {
-            long endEpoch = System.currentTimeMillis();
-            long responseTime = startEpoch == null ? -1 : endEpoch - startEpoch;
-            int status = (response == null || response.getStatusLine() == null) ? -1 : response.getStatusLine().getStatusCode();
-            StringBuilder sb = new StringBuilder();
-            sb.append("responseTime=").append(responseTime).append("\n")
-                    .append("status=").append(status).append("\n")
-                    .append("handShakeCount=").append(hv._handShakeCount).append("\n")
-                    .append("handShakeTime=").append(hv._handShakeTime).append("\n")
-                    .append("handShakeStatus=").append(hv._hansShakeStatus).append("\n");
-            System.out.println(sb.toString());
+            Metrics.getInstance().finishStep(Metrics.STEP_ALL);
+            System.out.println("status=" + (response == null ? 100 : response.getStatusLine().getStatusCode()));
+            System.out.println(Metrics.getInstance().toString());
         }
 
     }
@@ -176,7 +168,7 @@ public class Client {
         };
         SSLContext sslcontext = SSLContext.getInstance("TLS");
         sslcontext.init(null, new TrustManager[]{trustManager}, null);
-        SSLSocketFactory sf = new SSLSocketFactory(sslcontext);
+        LMSSLSocketFactory sf = new LMSSLSocketFactory(sslcontext);
         sf.setHostnameVerifier(hv);
         SchemeRegistry schemeRegistry = new SchemeRegistry();
         schemeRegistry.register(new Scheme("https", sf, 443));

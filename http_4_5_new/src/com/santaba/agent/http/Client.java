@@ -10,11 +10,9 @@ import org.apache.http.conn.HttpClientConnectionManager;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.ssl.SSLContexts;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.TrustStrategy;
 
 import javax.net.ssl.SSLContext;
@@ -56,46 +54,71 @@ public class Client {
                 return true;
             }
         }).build();
+        sslContext.getSocketFactory();
         LMSSLConnectionSocketFactory factory = new LMSSLConnectionSocketFactory(sslContext, NoopHostnameVerifier.INSTANCE);
-        CloseableHttpClient client = getClient(factory);
+        Registry<ConnectionSocketFactory> r = RegistryBuilder.<ConnectionSocketFactory>create()
+                .register("https", factory)
+                .register("http", new PlainConnectionSocketFactory())
+                .build();
+        LMManagedHttpClientConnectionFactory lmFactory = new LMManagedHttpClientConnectionFactory();
+        HttpClientConnectionManager cm = new PoolingHttpClientConnectionManager(r, lmFactory);
+        LMHttpRequestExecutor executor = new LMHttpRequestExecutor();
+
+        CloseableHttpClient client = LMHttpClients.custom()
+                .setConnectionManager(cm)
+                .setRequestExecutor(executor)
+                .build();
 
         HttpGet get = new HttpGet(new URI(argv[0]));
 
-        Long startEpoch = null ;
         CloseableHttpResponse response = null;
+        Metrics.getInstance().startStep(Metrics.STEP_ALL);
         try {
-            startEpoch = System.currentTimeMillis();
             response = client.execute(get);
         }
         finally {
-            long endEpoch = System.currentTimeMillis();
+            Metrics.getInstance().finishStep(Metrics.STEP_ALL);
+            System.out.println("status=" + (response == null ? 100 : response.getStatusLine().getStatusCode()));
+            /*
             long responseTime = startEpoch == null ? -1 : endEpoch - startEpoch;
+            long headerTime = executor.headerResponseTime;
+            long receiveAllBodyTime = executor.bodyResponseTime;
+            long requestCount = executor.sendRequestCount;
+            long processResponse = startEpoch == null ? -1 : executor.endEpoch - startEpoch;
             int status = (response == null || response.getStatusLine() == null) ? -1 : response.getStatusLine().getStatusCode();
             StringBuilder sb = new StringBuilder();
             sb.append("responseTime=").append(responseTime).append("\n")
                     .append("status=").append(status).append("\n")
                     .append("handShakeCount=").append(factory.handShakeCount).append("\n")
                     .append("handShakeTime=").append(factory.handShakeTime).append("\n")
-                    .append("handShakeStatus=").append(factory.handShakeStatus).append("\n");
+                    .append("handShakeStatus=").append(factory.handShakeStatus).append("\n")
+                    .append("connectCount=").append(factory.connectSocketCount).append("\n")
+                    .append("connectTime=").append(factory.connectSocketTime).append("\n")
+                    .append("prepareCount=").append(factory.prepareCount).append("\n")
+                    .append("prepareTime=").append(factory.prepareTime).append("\n")
+                    .append("createSockCount=").append(factory.createSockCount).append("\n")
+                    .append("createSockTime=").append(factory.createSockTime).append("\n")
+                    .append("headerReadTime=").append(headerTime).append("\n")
+                    .append("requestCount=").append(requestCount).append("\n")
+                    .append("receiveAllBodyTime=").append(receiveAllBodyTime).append("\n")
+                    .append("allResponseTime=").append(executor.allResponseTime).append("\n")
+                    .append("allExecuteTime=").append(executor.allExecuteTime).append("\n")
+                    .append("processResponse=").append(processResponse).append("\n")
+                    .append("connectionCount=").append(lmFactory.connectionCount).append("\n");
+                    */
+
+            StringBuilder sb = new StringBuilder();
+            for (String stepName : Metrics.getInstance().keySet()) {
+                Metrics.Step step = Metrics.getInstance().getStep(stepName);
+                sb.append(stepName).append("_ResponseTime=").append(step.responseTime).append("\n")
+                        .append(stepName).append("_Count=").append(step.count).append("\n")
+                        .append(stepName).append("_MaxTime=").append(step.maxTime).append("\n")
+                        .append(stepName).append("_MinTime=").append(step.minTime).append("\n");
+            }
             System.out.println(sb.toString());
         }
 
 
-    }
-
-    public static CloseableHttpClient getClient(LMSSLConnectionSocketFactory factory)
-            throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
-
-        Registry<ConnectionSocketFactory> r = RegistryBuilder.<ConnectionSocketFactory>create()
-                .register("https", factory)
-                .register("http", new PlainConnectionSocketFactory())
-                .build();
-        HttpClientConnectionManager cm = new PoolingHttpClientConnectionManager(r);
-
-        CloseableHttpClient client = HttpClients.custom()
-                .setConnectionManager(cm)
-                .build();
-        return client;
     }
 
 }

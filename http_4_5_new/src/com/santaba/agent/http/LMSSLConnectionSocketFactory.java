@@ -46,10 +46,6 @@ public class LMSSLConnectionSocketFactory implements LayeredConnectionSocketFact
     public static final String SSL   = "SSL";
     public static final String SSLV2 = "SSLv2";
 
-    public int handShakeCount = 0;
-    public long handShakeTime = 0;
-    public int handShakeStatus = 100; //200 means OK
-
     @Deprecated
     public static final X509HostnameVerifier ALLOW_ALL_HOSTNAME_VERIFIER
             = AllowAllHostnameVerifier.INSTANCE;
@@ -245,10 +241,12 @@ public class LMSSLConnectionSocketFactory implements LayeredConnectionSocketFact
                 this.log.debug("Connecting socket to " + remoteAddress + " with timeout " + connectTimeout);
             }
             sock.connect(remoteAddress, connectTimeout);
-        } catch (final IOException ex) {
+        }
+        catch (final IOException ex) {
             try {
                 sock.close();
-            } catch (final IOException ignore) {
+            }
+            catch (final IOException ignore) {
             }
             throw ex;
         }
@@ -258,23 +256,21 @@ public class LMSSLConnectionSocketFactory implements LayeredConnectionSocketFact
             this.log.debug("Starting handshake");
             handShake(sslsock, host.getHostName());
             return sock;
-        } else {
+        }
+        else {
             return createLayeredSocket(sock, host.getHostName(), remoteAddress.getPort(), context);
         }
+
     }
 
     private void handShake(SSLSocket sslSocket, String target) throws IOException {
-        boolean success = false;
-        long startEpoch = System.currentTimeMillis();
+        Metrics.getInstance().startStep(Metrics.STEP_4);
         try {
             sslSocket.startHandshake();
             verifyHostname(sslSocket, target);
-            success = true;
         }
         finally {
-            handShakeTime += System.currentTimeMillis() - startEpoch;
-            handShakeCount ++;
-            handShakeStatus = success ? 200 : 100;
+            Metrics.getInstance().finishStep(Metrics.STEP_4);
         }
 
     }
@@ -284,18 +280,27 @@ public class LMSSLConnectionSocketFactory implements LayeredConnectionSocketFact
             final String target,
             final int port,
             final HttpContext context) throws IOException {
-        final SSLSocket sslsock = (SSLSocket) this.socketfactory.createSocket(
-                socket,
-                target,
-                port,
-                true);
+
+        SSLSocket sslsock = null;
+        Metrics.getInstance().startStep(Metrics.STEP_3);
+        try {
+            sslsock = (SSLSocket) this.socketfactory.createSocket(
+                    socket,
+                    target,
+                    port,
+                    true);
+        }
+        finally {
+            Metrics.getInstance().finishStep(Metrics.STEP_3);
+        }
         if (supportedProtocols != null) {
             sslsock.setEnabledProtocols(supportedProtocols);
-        } else {
+        }
+        else {
             // If supported protocols are not explicitly set, remove all SSL protocol versions
             final String[] allProtocols = sslsock.getEnabledProtocols();
             final List<String> enabledProtocols = new ArrayList<String>(allProtocols.length);
-            for (String protocol: allProtocols) {
+            for (String protocol : allProtocols) {
                 if (!protocol.startsWith("SSL")) {
                     enabledProtocols.add(protocol);
                 }
@@ -315,6 +320,7 @@ public class LMSSLConnectionSocketFactory implements LayeredConnectionSocketFact
 
         prepareSocket(sslsock);
         this.log.debug("Starting handshake");
+
         handShake(sslsock, target);
         return sslsock;
     }

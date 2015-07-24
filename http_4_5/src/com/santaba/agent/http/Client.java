@@ -97,9 +97,7 @@ public class Client {
         LMSSLSocketFactory sf = new LMSSLSocketFactory(sslcontext);
         sf.setHostnameVerifier(hv);
 
-        Long startEpoch = null;
         HttpResponse response = null;
-        try {
             CommandLineParser parser = new DefaultParser();
             CommandLine commandLine = parser.parse(options, argv);
 
@@ -154,22 +152,16 @@ public class Client {
 
 
 
-            DefaultHttpClient client = new DefaultHttpClient(getManager(httpParams, sf), httpParams);
+            LMDefaultHttpClient client = new LMDefaultHttpClient(getManager(httpParams, sf), httpParams);
             get.setURI(new URI(args[0]));
-            startEpoch = System.currentTimeMillis();
+            Metrics.getInstance().startStep(Metrics.STEP_ALL);
+        try{
             response = client.execute(get, new BasicHttpContext());
         }
         finally {
-            long endEpoch = System.currentTimeMillis();
-            long responseTime = startEpoch == null ? -1 : endEpoch - startEpoch;
-            int status = (response == null || response.getStatusLine() == null) ? -1 : response.getStatusLine().getStatusCode();
-            StringBuilder sb = new StringBuilder();
-            sb.append("responseTime=").append(responseTime).append("\n")
-                    .append("status=").append(status).append("\n")
-                    .append("handShakeCount=").append(sf.handShakeCount).append("\n")
-                    .append("handShakeTime=").append(sf.handShakeTime).append("\n")
-                    .append("handShakeStatus=").append(sf.handShakeStatus).append("\n");
-            System.out.println(sb.toString());
+            Metrics.getInstance().finishStep(Metrics.STEP_ALL);
+            System.out.println("status=" + (response == null ? 100 : response.getStatusLine().getStatusCode()));
+            System.out.println(Metrics.getInstance().toString());
         }
 
     }
